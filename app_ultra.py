@@ -7,8 +7,8 @@ from openai import OpenAI
 from ner_utils import extract_entities
 from kreuzberg import extract_file
 
-DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "sk-27a1e2f983ac47c3b332f47010994a0b")
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-9f2e4ddcb11c42d7b45ca3e8cd38e6ac")
+DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 
 API_ENDPOINTS = [
     {"name": "DeepSeek官方", "base_url": "https://api.deepseek.com/v1", "api_key": DEEPSEEK_API_KEY, "model": "deepseek-chat"},
