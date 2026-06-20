@@ -1,7 +1,3 @@
-好的，以下是一份**完整的、100%基于你真实代码**的 RAG 项目 README。你可以直接复制保存为 `README.md` 放在项目根目录下。
-
----
-
 # 多格式文档智能问答系统（RAG）
 
 基于 RAG（Retrieval-Augmented Generation）架构的多格式文档问答系统。支持上传 PDF、Word、Excel、PPT、TXT 等多格式文档，自动构建本地知识库，通过语义检索 + 大模型生成实现精准问答。
