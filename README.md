@@ -1,4 +1,4 @@
-# 多格式文档智能问答系统（RAG）
+# 多格式文档问答系统（RAG）
 
 基于 RAG（Retrieval-Augmented Generation）架构的多格式文档问答系统。支持上传 PDF、Word、Excel、PPT、TXT 等多格式文档，自动构建本地知识库，通过语义检索 + 大模型生成实现精准问答。
 
