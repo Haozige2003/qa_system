@@ -1,181 +1,123 @@
-# 多格式异构文档 RAG 问答系统 
+# 文档问答系统
 
-基于 RAG（Retrieval-Augmented Generation）架构的多格式文档问答系统。支持上传 PDF、Word、Excel、PPT、TXT 等多格式文档，自动构建本地知识库，通过语义检索 + 大模型生成实现精准问答。
+一个把文档扔进去、问问题、拿答案的本地工具。支持 PDF、Word、Excel、PPT、TXT，不用训练，上传就能用。
 
-**项目特点**：
-- 多格式文档解析 + **四层解析兜底机制**，处理真实办公文档
-- **跨文档归属隔离检索**，避免多份文档内容混淆
-- 多 API 端点调度（DeepSeek + 阿里云通义），高可用设计
-- 基于 Gradio 的可视化界面，上传即用
+---
 
+## 项目用途
 
-## 项目结构
+- 把一堆简历、合同、技术文档丢进去，问“张三的学历”或者“这个合同里违约责任怎么写的”
+- 分文档来源，不会把张三的简历和李四的混在一起
+- 支持多文件批量上传，问完一个接着问下一个
+- 重启电脑数据还在，不用重新入库
 
-```
-├── app_pro.py              # 主程序（Gradio 界面 + API 调度）
-├── rag_retriever.py        # 检索核心类（ChromaDB + Embedding）
-├── chroma_db/              # 向量数据库持久化目录（运行后自动生成）
-└── .kreuzberg/             # 文档解析库缓存目录（运行后自动生成）
-```
+---
 
-
-## 依赖
-
-```
-Python 3.8+
-torch
-transformers
-sentence-transformers
-chromadb
-gradio
-openai
-kreuzberg
-pypdfium2
-PyPDF2
-python-docx
-openpyxl
-python-pptx
-```
-
-安装命令：
+## 怎么跑起来
 
 ```bash
-pip install torch transformers sentence-transformers chromadb gradio openai kreuzberg pypdfium2 PyPDF2 python-docx openpyxl python-pptx
+# 装依赖
+pip install -r requirements.txt
+
+# 跑
+python app_pro.py
 ```
 
+终端会打印一个地址（一般是 `http://127.0.0.1:7860`），浏览器打开就能用。
 
-## 快速开始
+---
 
-### 1. 配置 API Key
+## 需要什么
 
-在 `rag_app.py` 中设置你的 API Key：
+- Python 3.9+
+- 能联网（至少第一次启动要下载模型文件）
+- 有显卡更好（没有也能跑，慢点而已）
 
-```python
-DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "sk-你的阿里云Key")
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-你的DeepSeekKey")
-```
+---
 
-系统会**自动遍历多个端点**，单个 API 失败时自动切换。
-
-### 2. 启动服务
-
-```bash
-python rag_app.py
-```
-
-终端会输出一个本地地址（如 `http://127.0.0.1:7860`），在浏览器中打开即可访问。
-
-### 3. 使用流程
-
-1. **上传文档**：点击上传按钮，可选择多个文件（PDF/Word/Excel/PPT/TXT）
-2. **点击“入库”**：系统自动提取文本、分块、生成向量索引
-3. **输入问题**：在问题框输入问题，点击“回答”
-4. **查看结果**：系统返回答案并展示检索到的相关片段
-
-
-## 支持的文档格式
-
-| 格式 | 解析方式 |
-|------|----------|
-| `.txt` / `.md` / `.csv` / `.json` / `.py` | 直接读取（UTF-8/GBK 自动适配） |
-| `.pdf` | 四层兜底：Kreuzberg → pypdfium2 → PyPDF2 |
-| `.docx` | Kreuzberg → python-docx |
-| `.pptx` | Kreuzberg → python-pptx |
-| `.xlsx` | Kreuzberg → openpyxl |
-
-> 解析失败时自动切换下一层方案，**单文件处理时间控制在 2 秒以内**。
-
-
-## 核心设计
-
-### 1. 四层解析兜底机制
-
-针对不同格式文档的编码差异，设计了分层解析策略：
+## 文件放哪了
 
 ```
-用户上传文件
-     ↓
-Kreuzberg 通用解析器（首选）
-     ↓ 失败
-格式专用解析器（pypdfium2 / python-docx / openpyxl / python-pptx）
-     ↓ 失败
-基础解析器（PyPDF2 等）
-     ↓ 失败
-返回空字符串（记录失败日志）
+qa_system/
+├── app_pro.py              # 界面和调度，你点的按钮都在这里
+├── rag_retriever.py        # 向量检索、切块、入库的核心逻辑
+├── ner_lora_output/        # 你微调过的人名抽取模型
+│   └── lora_adapter/
+├── chroma_db/              # 向量数据库文件夹（跑起来后自动生成）
 ```
 
-这一设计显著提升了真实办公场景下的文档解析成功率。
+---
 
-### 2. 跨文档归属隔离检索
+## 怎么工作的
 
-**场景痛点**：上传多份简历或合同时，用户提问“他的毕业院校是哪里？”系统不知道“他”是谁，可能从错误文档中检索。
+1. **你上传一个 PDF**
+2. 程序用 `kreuzberg` 把文字拽出来（拽不出来就换 `pypdfium2`，再不行换 `PyPDF2`，层层降级）
+3. 长文章切成 500 字一块，块与块之间重叠 150 字（防止一句话被砍成两半）
+4. 每块文字转成一串数字（向量），存进 `ChromaDB`
+5. **你问一个问题**
+6. 程序把问题也转成向量，去数据库里找最像的几块
+7. 把这几块文字和问题一起丢给大模型（DeepSeek 或阿里云），让它根据这些材料回答
+8. 答案出现在网页上
 
-**解决方案**：
-- 入库时通过 `doc_id` 元数据标记每个文本块的来源文档
-- 支持自动提取**人名**作为元数据标签（正则匹配“姓名：XXX”或开头中文名）
-- 提问时**先按人名过滤检索**，召回不足时自动回退全库检索
+整个流程大概 3-5 秒。
 
-**适用场景**：
-- 多份简历批量筛选
-- 合同版本管理（v1 / v2 / v3）
-- 多作者稿件区分
+---
 
-### 3. 高可用 LLM 调用层
+## 两个文件的关系
 
-```python
-API_ENDPOINTS = [
-    {"name": "DeepSeek", "base_url": "https://api.deepseek.com/v1", ...},
-    {"name": "阿里云", "base_url": "https://dashscope.aliyuncs.com/...", ...}
-]
-```
+- `app_pro.py`：前台接待，负责收文件、收问题、摆界面
+- `rag_retriever.py`：后台档案管理员，负责切块、入库、检索
 
-- 遍历多个 API 端点，单个失败自动切换
-- 单端点失败时指数退避重试（2 秒 → 4 秒）
-- Temperature = 0.3 + “仅使用检索片段回答”约束，控制模型幻觉
+`app_pro.py` 调用 `rag_retriever.py` 里定义的 `RAGRetriever` 类干活。
 
+---
 
-## 检索策略详解
+## 关于人名抽取
 
-| 步骤 | 说明 |
-|------|------|
-| 文本分块 | `chunk_size=500, overlap=150`，保持上下文连贯性 |
-| 向量化 | 使用 `shibing624/text2vec-base-chinese` 中文 Embedding 模型 |
-| 索引存储 | ChromaDB 持久化，重启数据不丢失 |
-| 语义检索 | 基于余弦相似度召回 Top-K 相关块 |
-| 元数据过滤 | 支持按 `doc_id` / `person_name` 等字段过滤 |
-| 回退策略 | 按人名过滤召回 < 2 条时，自动全库检索补充 |
+这个功能是为了解决“张三的简历”这种定向检索需求。
 
+**优先级是这样的：**
 
-## 交互界面
+1. 先看文档里有没有“姓名：张三”这种标准格式 → 直接命中，准确率100%
+2. 没有的话，用你微调过的 `bert-base-chinese + LoRA` 模型去理解上下文（比如“我叫张三”）
+3. 模型也抓不到 → 返回空，不影响入库和检索
 
-基于 Gradio 搭建，包含以下模块：
+**为什么不用纯模型：**
 
-| 模块 | 功能 |
-|------|------|
-| 文件上传 | 支持多文件批量上传 |
-| 入库按钮 | 解析、分块、向量化、入库一站式完成 |
-| 状态栏 | 显示入库进度、文档块数、错误日志 |
-| 问题输入 | 用户提问 |
-| 答案输出 | 显示 LLM 生成的回答 |
-| 检索片段展示 | 显示被召回的原始文本块，便于溯源 |
+正则抓到的“姓名：张三”不需要模型介入，快且准。模型只处理正则处理不了的边缘情况，比如“我叫张三”这种非标写法。把模型放后面当保底，而不是放前面当主力，这样既覆盖了大多数场景，又不至于因为模型误判污染数据。
 
+**你微调的那个 LoRA 模型：**
 
-## 功能自测
+分类头是 28 类，基于 `bert-base-chinese` 微调过。代码里已经配好了路径，放在 `ner_lora_output/lora_adapter/`，启动时会自动加载。如果加载失败，程序会退回到纯正则模式，不影响主流程运行。
 
-- [x] PDF/Word/Excel/PPT/TXT 解析入库
-- [x] 同名文档自动覆盖更新
-- [x] 按人名过滤检索
-- [x] 召回不足时自动回退全库
-- [x] 多 API 端点自动切换
-- [x] Gradio 界面交互
+---
 
+## 技术栈
 
-## 未来优化方向
+- `Gradio`：网页界面
+- `ChromaDB`：向量数据库
+- `Sentence-Transformers`：文本转向量
+- `transformers` + `peft`：加载你微调的 LoRA 模型
+- `kreuzberg` / `PyPDF2` / `python-docx` / `openpyxl`：文档解析
+- OpenAI SDK：调用 DeepSeek 和阿里云通义
 
-- [ ] 支持更多 Embedding 模型（如 BGE、OpenAI Embedding）
-- [ ] 增加文档摘要生成功能
-- [ ] 支持混合检索（关键词 + 向量）
-- [ ] 添加对话历史记忆功能
+---
+
+## 已知问题
+
+- 启动时如果模型缓存不存在，会去 HuggingFace 下载，国内网络可能慢
+- 解析超大 PDF（几百页）会慢一些，但还没卡死过
+- 如果你微调的那个 LoRA 模型文件路径不对，启动会打印警告，不影响纯正则模式运行
+
+---
+
+## 如果你也想改
+
+人名提取的阈值（`len(person_name) >= 2`）在 `rag_retriever.py` 的 `_extract_person_name_with_lora` 方法里，觉得误判多可以改成 `>= 3`。
+
+切块大小（`chunk_size` 和 `overlap`）在 `add_document` 方法里，默认 500 和 150，觉得检索精度不够可以调小。
+
+---
 
 
 ##  作者
